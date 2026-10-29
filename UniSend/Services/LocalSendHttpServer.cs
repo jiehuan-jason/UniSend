@@ -225,7 +225,7 @@ namespace UniSend.Services
                         }
                         else
                         {
-                            await SendOkResponseAsync(outStream, "application/json");
+                            await SendOkWithoutStreamResponseAsync(outStream, "application/json");
                         }
                     }
 

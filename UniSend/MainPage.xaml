@@ -20,7 +20,7 @@
         <StackPanel Grid.Row="0">
             <StackPanel Orientation="Horizontal">
                 <Button HorizontalAlignment="Center" VerticalAlignment="Center" Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
-                    <SymbolIcon Symbol="GlobalNavigationButton" Height="30" />
+                    <FontIcon FontFamily="{ThemeResource SymbolThemeFontFamily}" Glyph="&#xE700;" Height="30" />
                 </Button>
                 <TextBlock Text="UniSend" FontSize="30" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="6,0,0,8"/>
             </StackPanel>
