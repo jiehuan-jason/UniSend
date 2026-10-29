@@ -10,35 +10,50 @@
     <Grid Background="{ThemeResource ApplicationPageBackgroundThemeBrush}" Padding="24">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="180"/>
         </Grid.RowDefinitions>
 
         <!-- 顶部操作栏 -->
         <StackPanel Grid.Row="0">
-            <TextBlock Text="UniSend - LocalSend UWP" FontSize="24" FontWeight="Bold" Margin="0,0,0,8"/>
             <StackPanel Orientation="Horizontal">
-                <TextBlock x:Name="TxtStatus" Text="正在启动..." VerticalAlignment="Center" Margin="0,0,16,0"/>
-                <Button Content="刷新/重新广播" Click="OnBroadcastClick" Margin="0,0,16,0"/>
-                <Button Content="打开下载目录" Click="OnOpenFolderClick"/>
+                <Button HorizontalAlignment="Center" VerticalAlignment="Center" Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
+                    <SymbolIcon Symbol="GlobalNavigationButton" Height="30" />
+                </Button>
+                <TextBlock Text="UniSend" FontSize="30" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="6,0,0,8"/>
+            </StackPanel>
+            
+            <StackPanel Orientation="Horizontal">
+                
             </StackPanel>
         </StackPanel>
 
+        <Grid Grid.Row="1">
+            
+        </Grid>
+
         <!-- 中部：已发现设备列表 -->
-        <Grid Grid.Row="1" Margin="0,16,0,16">
+        <Grid Grid.Row="2" Margin="0,8,0,16">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"/>
                 <RowDefinition Height="*"/>
             </Grid.RowDefinitions>
 
-            <TextBlock Grid.Row="0" Text="已发现的设备 (局域网):" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,8"/>
-
-            <ListView Grid.Row="1" x:Name="DeviceListView" BorderThickness="1" BorderBrush="Gray">
+            <StackPanel Grid.Row="0" Orientation="Horizontal">
+                <TextBlock Text="已发现的设备" FontSize="18" Margin="0,0,0,8" VerticalAlignment="Center"/>
+                <Button Click="OnBroadcastClick" Margin="8,-6,8,0"  Background="{ThemeResource ApplicationPageBackgroundThemeBrush}" VerticalAlignment="Center">
+                    <FontIcon Height="25" FontFamily="{ThemeResource SymbolThemeFontFamily}" Glyph="&#xE895;" />
+                </Button>
+            </StackPanel>
+            
+            <ListView Grid.Row="1" x:Name="DeviceListView" >
                 <ListView.ItemTemplate>
                     <DataTemplate x:DataType="models:DeviceDto">
                         <StackPanel Padding="8">
                             <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
-                                <TextBlock Text="📱" FontSize="16" Margin="0,0,8,0"/>
+                                <TextBlock FontFamily="{ThemeResource SymbolThemeFontFamily}" Text="&#xE703;" FontSize="16" Margin="0,0,8,0"/>
                                 <TextBlock Text="{x:Bind Alias}" FontWeight="Bold" Margin="0,0,8,0"/>
                                 <TextBlock Text="{x:Bind DeviceModel}" Foreground="Gray"/>
                             </StackPanel>
@@ -49,8 +64,34 @@
             </ListView>
         </Grid>
 
+        <Grid Grid.Row="3" Margin="0,0,0,6" Height="60">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <Button HorizontalAlignment="Stretch" Grid.Column="0" Margin="0,0,6,0" BorderThickness="1" BorderBrush="Gray" Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
+                <StackPanel Margin="0,4,0,0">
+                    <FontIcon FontFamily="{ThemeResource SymbolThemeFontFamily}" Glyph="&#xE8E5;" />
+                    <TextBlock Text="File" />
+                </StackPanel>
+            </Button>
+            <Button HorizontalAlignment="Stretch" Grid.Column="1" Margin="0,0,6,0" BorderThickness="1" BorderBrush="Gray" Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
+                <StackPanel Margin="0,4,0,0" VerticalAlignment="Stretch">
+                    <FontIcon FontFamily="{ThemeResource SymbolThemeFontFamily}" Glyph="&#xEB9F;" />
+                    <TextBlock Text="Photo" />
+                </StackPanel>
+            </Button>
+            <Button HorizontalAlignment="Stretch" Grid.Column="2" Margin="0,0,0,0" BorderThickness="1" BorderBrush="Gray" Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
+                <StackPanel Margin="0,4,0,0" VerticalAlignment="Stretch">
+                    <FontIcon FontFamily="{ThemeResource SymbolThemeFontFamily}" Glyph="&#xEA37;" />
+                    <TextBlock Text="Text" />
+                </StackPanel>
+            </Button>
+        </Grid>
+
         <!-- 底部：日志控制台 -->
-        <ScrollViewer Grid.Row="2" BorderThickness="1" BorderBrush="LightGray" Padding="6">
+        <ScrollViewer Grid.Row="4" BorderThickness="1" BorderBrush="LightGray" Padding="6">
             <TextBlock x:Name="TxtLogs" TextWrapping="Wrap" FontFamily="Consolas" FontSize="11"/>
         </ScrollViewer>
     </Grid>
