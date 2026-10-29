@@ -10,6 +10,8 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using UniSend.Models;
 using System.Collections.Generic;
+using Windows.Security.ExchangeActiveSyncProvisioning;
+using Windows.Storage.Pickers;
 
 namespace UniSend.Services
 {
@@ -31,7 +33,8 @@ namespace UniSend.Services
             = new ConcurrentDictionary<string, ConcurrentDictionary<string, string>>();
         private readonly ConcurrentDictionary<string, string> _fileNames = new ConcurrentDictionary<string, string>();
 
-        public string DeviceAlias { get; set; } = "UWP-UniSend";
+
+        public string DeviceAlias { get; set; } = new EasClientDeviceInformation().FriendlyName + " UWP";
         public string Fingerprint { get; set; }
         public int Port { get; set; } = 53317;
 
@@ -228,14 +231,15 @@ namespace UniSend.Services
 
         private async Task HandleFileUploadAsync(string queryString, Stream bodyStream, long contentLength, Stream outStream)
         {
+            // 1. 防御性检查
             if (string.IsNullOrWhiteSpace(queryString) || queryString == "?")
             {
                 await SendResponseAsync(outStream, "400 Bad Request", "text/plain", "Missing query parameters");
                 return;
             }
 
+            // 2. 解析 QueryString
             string sessionId = null, fileId = null, token = null;
-
             try
             {
                 var decoder = new Windows.Foundation.WwwFormUrlDecoder(queryString);
@@ -258,6 +262,7 @@ namespace UniSend.Services
                 return;
             }
 
+            // 3. 校验 Token
             if (!_activeSessions.TryGetValue(sessionId, out var files) ||
                 !files.TryGetValue(fileId, out var expectedToken) ||
                 expectedToken != token)
@@ -268,12 +273,60 @@ namespace UniSend.Services
 
             string fileName = _fileNames.TryGetValue(fileId, out var name) ? name : "received_file.bin";
 
-            StorageFolder folder = ApplicationData.Current.LocalFolder;
-            StorageFile file = await folder.CreateFileAsync(fileName, CreationCollisionOption.GenerateUniqueName);
+            // 4. 使用 TaskCompletionSource 让后台线程等待 UI 弹窗选择彻底结束
+            var tcs = new TaskCompletionSource<StorageFile>();
 
+            var dispatcher = Windows.ApplicationModel.Core.CoreApplication.MainView.CoreWindow.Dispatcher;
+            await dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, async () =>
+            {
+                try
+                {
+                    var savePicker = new Windows.Storage.Pickers.FileSavePicker();
+                    savePicker.SuggestedStartLocation = Windows.Storage.Pickers.PickerLocationId.Downloads;
+                    savePicker.SuggestedFileName = Path.GetFileNameWithoutExtension(fileName);
+
+                    string ext = Path.GetExtension(fileName);
+                    if (string.IsNullOrEmpty(ext))
+                    {
+                        ext = ".bin";
+                    }
+                    savePicker.FileTypeChoices.Add("文件类型", new System.Collections.Generic.List<string>() { ext });
+
+                    // 真正等待用户操作完成
+                    var pickedFile = await savePicker.PickSaveFileAsync();
+                    tcs.TrySetResult(pickedFile);
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[Picker 异常] {ex.Message}");
+                    tcs.TrySetResult(null);
+                }
+            });
+
+            // 关键点：后台线程在此处真正挂起等待，直到用户选定文件或取消
+            StorageFile file = await tcs.Task;
+
+            // 5. 判断用户是否选择了保存位置
+            if (file == null)
+            {
+                // 用户真的点击了取消或关闭选择器：读空流并回复取消
+                byte[] discardBuf = new byte[8192];
+                long remainingDiscard = contentLength;
+                while (remainingDiscard > 0)
+                {
+                    int r = await bodyStream.ReadAsync(discardBuf, 0, (int)Math.Min(discardBuf.Length, remainingDiscard));
+                    if (r == 0) break;
+                    remainingDiscard -= r;
+                }
+
+                await SendResponseAsync(outStream, "409 Conflict", "text/plain", "User cancelled save");
+                return;
+            }
+
+            // 6. 写入用户选定的目标文件
             using (var destStream = await file.OpenStreamForWriteAsync())
             {
-                byte[] buffer = new byte[65536];
+                byte[] buffer = new byte[65536]; // 64 KB 读写缓冲
                 long remaining = contentLength;
                 while (remaining > 0)
                 {
@@ -284,6 +337,7 @@ namespace UniSend.Services
                 }
             }
 
+            // 7. 清理 Token 并通知传输完成
             files.TryRemove(fileId, out _);
             await SendResponseAsync(outStream, "200 OK", "application/json", "{}");
         }

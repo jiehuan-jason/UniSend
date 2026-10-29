@@ -8,6 +8,8 @@ using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
 using UniSend.Models;
 using UniSend.Services;
+using Windows.Devices.Enumeration;
+using Windows.Security.ExchangeActiveSyncProvisioning;
 
 namespace UniSend
 {
@@ -29,7 +31,10 @@ namespace UniSend
         private async void MainPage_Loaded(object sender, RoutedEventArgs e)
         {
             string fingerprint = DeviceIdentityHelper.GenerateFingerprint();
-            string alias = "Lumia-UniSend";
+
+            var deviceInfo = new EasClientDeviceInformation();
+
+            string alias = deviceInfo.FriendlyName + " UWP";
 
             _httpServer = new LocalSendHttpServer
             {
