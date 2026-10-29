@@ -10,6 +10,7 @@ using UniSend.Models;
 using UniSend.Services;
 using Windows.Devices.Enumeration;
 using Windows.Security.ExchangeActiveSyncProvisioning;
+using Windows.ApplicationModel.DataTransfer;
 
 namespace UniSend
 {
@@ -54,9 +55,45 @@ namespace UniSend
             await _discoveryService.StartAsync(fingerprint);
         }
 
-        private void ReceivedTextFile(UploadFile obj)
+        private async void ReceivedTextFile(UploadFile obj)
         {
+            await Dispatcher.RunAsync(CoreDispatcherPriority.Normal, async () =>
+            {
+                ContentDialog receivedTextDialog = new ContentDialog()
+                {
+                    Title = "Text sent from " + obj.SenderName,
+                    Content = obj.Preview,
+                    PrimaryButtonText = "Copy",
+                    SecondaryButtonText = "Reject",
+                    CloseButtonText = "OK",
+                    DefaultButton = ContentDialogButton.Close
+                };
+
+                var result = await receivedTextDialog.ShowAsync();
+                if (result == ContentDialogResult.Primary)
+                {
+                    setPasteBoradContent(obj.Preview);
+                }
+
+                if (result == ContentDialogResult.Secondary)
+                {
+                    obj.UserResponseTcs.TrySetResult(STATUS_RESPONSE.REJECT);
+
+                }
+                else
+                {
+                    obj.UserResponseTcs.TrySetResult(STATUS_RESPONSE.OK_WITHOUT_RECEIVE);
+                }
+            });
+
             AppendLog("[Receive] From "+ obj.SenderName + " : " + obj.Preview);
+        }
+
+        private void setPasteBoradContent(String content)
+        {
+            var dataPackage = new DataPackage();
+            dataPackage.SetText(content);
+            Clipboard.SetContent(dataPackage);
         }
 
         // 收到设备广播时更新到 ListView
@@ -126,5 +163,22 @@ namespace UniSend
                 TxtLogs.Text += $"[{DateTime.Now:HH:mm:ss}] {text}\n";
             });
         }
+    }
+
+    public class RelayCommand : System.Windows.Input.ICommand
+    {
+        private readonly Action _execute;
+        private Action<string> setPasteBoradContent;
+
+        public RelayCommand(Action execute) => _execute = execute;
+
+        public RelayCommand(Action<string> setPasteBoradContent)
+        {
+            this.setPasteBoradContent = setPasteBoradContent;
+        }
+
+        public bool CanExecute(object parameter) => true;
+        public void Execute(object parameter) => _execute();
+        public event EventHandler CanExecuteChanged;
     }
 }

@@ -23,6 +23,9 @@ namespace UniSend.Services
         public string fileType { get; set; }
         public string Preview { get; set; } = "";
         public string SenderName { get; set; }
+        public Stream stream { get; set; }
+        public TaskCompletionSource<STATUS_RESPONSE> UserResponseTcs { get; }
+        = new TaskCompletionSource<STATUS_RESPONSE>();
     }
 
     public class LocalSendHttpServer : IDisposable
@@ -196,20 +199,34 @@ namespace UniSend.Services
                     var id = fileProp.Name;
                     var token = Guid.NewGuid().ToString("N");
                     var name = (string)fileProp.Value["fileName"] ?? "received_file.bin";
-
-                    filesList.Add(new UploadFile
+                    var uploadFileObj = new UploadFile
                     {
                         Id = id,
                         Name = name,
                         Token = token,
                         fileType = (string)fileProp.Value["fileType"],
                         Preview = !string.IsNullOrEmpty((string)fileProp.Value["preview"]) ? (string)fileProp.Value["preview"] : "",
-                        SenderName = senderName
-                    });
+                        SenderName = senderName,
+                        stream = outStream
+                    };
 
-                    if(!filesList[filesList.Count - 1].Preview.Equals(""))
+                    filesList.Add(uploadFileObj);
+
+                    if(!uploadFileObj.Preview.Equals(""))
                     {
+
                         ReceivedTextFile?.Invoke(filesList[filesList.Count - 1]);
+
+                        STATUS_RESPONSE choice = await uploadFileObj.UserResponseTcs.Task;
+
+                        if (choice == STATUS_RESPONSE.REJECT)
+                        {
+                            await SendRejectResponseAsync(outStream);
+                        }
+                        else
+                        {
+                            await SendOkResponseAsync(outStream, "application/json");
+                        }
                     }
 
                     tokenMap[id] = token;
@@ -237,6 +254,8 @@ namespace UniSend.Services
                 await SendResponseAsync(outStream, "400 Bad Request", "text/plain", "Missing query parameters");
                 return;
             }
+
+
 
             // 2. 解析 QueryString
             string sessionId = null, fileId = null, token = null;
@@ -272,6 +291,13 @@ namespace UniSend.Services
             }
 
             string fileName = _fileNames.TryGetValue(fileId, out var name) ? name : "received_file.bin";
+            string ext = Path.GetExtension(fileName);
+
+            if (ext.Equals(".txt"))
+            {
+                return;
+            }
+
 
             // 4. 使用 TaskCompletionSource 让后台线程等待 UI 弹窗选择彻底结束
             var tcs = new TaskCompletionSource<StorageFile>();
@@ -284,8 +310,7 @@ namespace UniSend.Services
                     var savePicker = new Windows.Storage.Pickers.FileSavePicker();
                     savePicker.SuggestedStartLocation = Windows.Storage.Pickers.PickerLocationId.Downloads;
                     savePicker.SuggestedFileName = Path.GetFileNameWithoutExtension(fileName);
-
-                    string ext = Path.GetExtension(fileName);
+                    
                     if (string.IsNullOrEmpty(ext))
                     {
                         ext = ".bin";
@@ -388,6 +413,44 @@ namespace UniSend.Services
             await outStream.FlushAsync();
         }
 
+        /* public async void SendResponse(Stream outStream, STATUS_RESPONSE status, string text = "")
+         {
+             switch (status)
+             {
+                 case STATUS_RESPONSE.OK:
+                     await SendResponseAsync(outStream, "200 OK", "application/json", "{}");
+                     break;
+                 case STATUS_RESPONSE.INVALID:
+
+             }
+             return;
+
+         }*/
+        public async Task SendOkResponseAsync(Stream outStream, string contentType, string text = "{}")
+        {
+            await SendResponseAsync(outStream, "200 OK", contentType, text);
+            return;
+        }
+        public async Task SendOkWithoutStreamResponseAsync(Stream outStream, string contentType, string text = "{}")
+        {
+            await SendResponseAsync(outStream, "204 OK", contentType, text);
+            return;
+        }
+        public async Task SendRejectResponseAsync(Stream outStream)
+        {
+            await SendResponseAsync(outStream, "403 Forbidden", "text/plain", "User cancelled save");
+            return;
+        }
+
         public void Dispose() => _listener?.Dispose();
+    }
+
+    public enum STATUS_RESPONSE
+    {
+        OK,
+        OK_WITHOUT_RECEIVE,
+        INVALID,
+        REJECT,
+        UNKNOWN
     }
 }
