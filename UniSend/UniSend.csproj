@@ -139,7 +139,7 @@
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Services\LocalSendDiscoveryService.cs" />
     <Compile Include="Services\LocalSendHttpServer.cs" />
-    <Compile Include="Utils\CertificateHelper.cs" />
+    <Compile Include="Utils\DeviceIdentityHelper.cs" />
     <Compile Include="Utils\LocalSendSecurityManager.cs" />
   </ItemGroup>
   <ItemGroup>

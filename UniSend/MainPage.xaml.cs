@@ -40,7 +40,7 @@ namespace UniSend
         {
             SendUploadResquest += UploadTextFile;
 
-            string fingerprint = DeviceIdentityHelper.GenerateFingerprint();
+            string fingerprint = DeviceIdentityHelper.GetFingerprint();
 
             var deviceInfo = new EasClientDeviceInformation();
 
