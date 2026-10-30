@@ -11,6 +11,8 @@ using UniSend.Services;
 using Windows.Devices.Enumeration;
 using Windows.Security.ExchangeActiveSyncProvisioning;
 using Windows.ApplicationModel.DataTransfer;
+using UniSend.Dialogs;
+using System.Collections.Generic;
 
 namespace UniSend
 {
@@ -21,6 +23,11 @@ namespace UniSend
 
         // 绑定的设备集合
         public ObservableCollection<DeviceDto> DiscoveredDevices { get; } = new ObservableCollection<DeviceDto>();
+        public ObservableCollection<CardItem> FileItems { get; } = new ObservableCollection<CardItem>();
+        public List<PreUploadFile> preUploadFiles = new List<PreUploadFile>();
+
+        public event Action<string, DeviceDto> SendUploadResquest;
+        
 
         public MainPage()
         {
@@ -31,6 +38,8 @@ namespace UniSend
 
         private async void MainPage_Loaded(object sender, RoutedEventArgs e)
         {
+            SendUploadResquest += UploadTextFile;
+
             string fingerprint = DeviceIdentityHelper.GenerateFingerprint();
 
             var deviceInfo = new EasClientDeviceInformation();
@@ -55,7 +64,7 @@ namespace UniSend
             await _discoveryService.StartAsync(fingerprint);
         }
 
-        private async void ReceivedTextFile(UploadFile obj)
+        private async void ReceivedTextFile(ReceivedUploadFile obj)
         {
             await Dispatcher.RunAsync(CoreDispatcherPriority.Normal, async () =>
             {
@@ -163,22 +172,44 @@ namespace UniSend
                 TxtLogs.Text += $"[{DateTime.Now:HH:mm:ss}] {text}\n";
             });
         }
-    }
 
-    public class RelayCommand : System.Windows.Input.ICommand
-    {
-        private readonly Action _execute;
-        private Action<string> setPasteBoradContent;
-
-        public RelayCommand(Action execute) => _execute = execute;
-
-        public RelayCommand(Action<string> setPasteBoradContent)
+        private async void ChooseTextButton_Click(object sender, RoutedEventArgs e)
         {
-            this.setPasteBoradContent = setPasteBoradContent;
+            await Dispatcher.RunAsync(CoreDispatcherPriority.Normal, async () =>
+            {
+                InputContentDialog inputTextDialog = new InputContentDialog()
+                {
+                    Title = "Input Text",
+                    PrimaryButtonText = "Cancel",
+                    CloseButtonText = "OK",
+                    DefaultButton = ContentDialogButton.Close
+                };
+
+                var result = await inputTextDialog.ShowAsync();
+                if(result != ContentDialogResult.Primary)
+                {
+                    var text = inputTextDialog.inputTextBoxContent();
+                    preUploadFiles.Add(PreUploadFile.PreUploadTextFile(text));
+                    FileItems.Add(new CardItem
+                    {
+                        Title = "",
+                        Icon = "\uEA37"
+                    });
+                }
+            });
         }
 
-        public bool CanExecute(object parameter) => true;
-        public void Execute(object parameter) => _execute();
-        public event EventHandler CanExecuteChanged;
+        private async void UploadTextFile(string text, DeviceDto target)
+        {
+            await _httpServer.SendPlainTextAsync(target.Ip, text, target.Port);
+        }
+
+        private async void DeviceListView_ItemClick(object sender, ItemClickEventArgs e)
+        {
+            var target = (DeviceDto)e.ClickedItem;
+            await _httpServer.SendPrepaidUploadFileAsync(target.Ip, preUploadFiles, target.Port, target.Protocol);
+            preUploadFiles.Clear();
+            FileItems.Clear();
+        }
     }
 }

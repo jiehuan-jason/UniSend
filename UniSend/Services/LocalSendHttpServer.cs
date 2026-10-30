@@ -12,21 +12,14 @@ using UniSend.Models;
 using System.Collections.Generic;
 using Windows.Security.ExchangeActiveSyncProvisioning;
 using Windows.Storage.Pickers;
+using Windows.Web.Http.Filters;
+using Windows.Security.Cryptography.Certificates;
+using Windows.Web.Http;
+using UniSend.Utils;
 
 namespace UniSend.Services
 {
-    public class UploadFile
-    {
-        public string Id { get; set; }
-        public string Name { get; set; }
-        public string Token { get; set; }
-        public string fileType { get; set; }
-        public string Preview { get; set; } = "";
-        public string SenderName { get; set; }
-        public Stream stream { get; set; }
-        public TaskCompletionSource<STATUS_RESPONSE> UserResponseTcs { get; }
-        = new TaskCompletionSource<STATUS_RESPONSE>();
-    }
+    
 
     public class LocalSendHttpServer : IDisposable
     {
@@ -42,7 +35,7 @@ namespace UniSend.Services
         public int Port { get; set; } = 53317;
 
         public event Action<DeviceDto> DeviceDiscovered;
-        public event Action<UploadFile> ReceivedTextFile;
+        public event Action<ReceivedUploadFile> ReceivedTextFile;
 
         public async Task StartAsync(string fingerprint, int port = 53317)
         {
@@ -188,7 +181,7 @@ namespace UniSend.Services
                     return;
                 }
 
-                var filesList = new List<UploadFile>();
+                var filesList = new List<ReceivedUploadFile>();
 
                 string sessionId = Guid.NewGuid().ToString();
                 var tokenMap = new ConcurrentDictionary<string, string>();
@@ -199,7 +192,7 @@ namespace UniSend.Services
                     var id = fileProp.Name;
                     var token = Guid.NewGuid().ToString("N");
                     var name = (string)fileProp.Value["fileName"] ?? "received_file.bin";
-                    var uploadFileObj = new UploadFile
+                    var uploadFileObj = new ReceivedUploadFile
                     {
                         Id = id,
                         Name = name,
@@ -222,10 +215,12 @@ namespace UniSend.Services
                         if (choice == STATUS_RESPONSE.REJECT)
                         {
                             await SendRejectResponseAsync(outStream);
+                            return;
                         }
                         else
                         {
                             await SendOkWithoutStreamResponseAsync(outStream, "application/json");
+                            return;
                         }
                     }
 
@@ -307,7 +302,7 @@ namespace UniSend.Services
             {
                 try
                 {
-                    var savePicker = new Windows.Storage.Pickers.FileSavePicker();
+                    var savePicker = new FileSavePicker();
                     savePicker.SuggestedStartLocation = Windows.Storage.Pickers.PickerLocationId.Downloads;
                     savePicker.SuggestedFileName = Path.GetFileNameWithoutExtension(fileName);
                     
@@ -413,6 +408,104 @@ namespace UniSend.Services
             await outStream.FlushAsync();
         }
 
+        public async Task SendPlainTextAsync(string targetIp, string text, int targetPort = 53317)
+        {
+            var file = new List<PreUploadFile>();
+            file.Add(PreUploadFile.PreUploadTextFile(text));
+            await SendPrepaidUploadFileAsync(targetIp, file, targetPort);
+        }
+
+        public async Task SendPrepaidUploadFileAsync(string targetIp, List<PreUploadFile> preUploadFiles, int targetPort = 53317, string protocol = "https")
+        {
+
+            var filter = new HttpBaseProtocolFilter();
+            // 关键：在 10586 下对自签名证书必须加入所有可能的链错误忽略
+            filter.IgnorableServerCertificateErrors.Add(ChainValidationResult.Untrusted);
+            filter.IgnorableServerCertificateErrors.Add(ChainValidationResult.InvalidName);
+            filter.IgnorableServerCertificateErrors.Add(ChainValidationResult.Expired);
+            filter.IgnorableServerCertificateErrors.Add(ChainValidationResult.WrongUsage);
+            filter.IgnorableServerCertificateErrors.Add(ChainValidationResult.RevocationFailure);
+            /*var clientCert = await GetOrCreateClientCertificateAsync();
+            if (clientCert != null)
+            {
+                filter.ClientCertificate = clientCert;
+            }*/
+            var clientCert = await LocalSendSecurityManager.GetOrCreateClientCertificateAsync();
+            if (clientCert != null)
+            {
+                filter.ClientCertificate = clientCert;
+            }
+
+            // 4. 获取与证书严格吻合的 SHA-256 指纹
+            string fingerprint = await LocalSendSecurityManager.GetFingerprintAsync();
+
+            try
+            {
+
+                using (var client = new HttpClient(filter))
+                {
+
+                    var payload = new
+                    {
+                        info = new
+                        {
+                            alias = DeviceAlias,
+                            version = "2.0",
+                            deviceModel = "Windows",
+                            deviceType = "desktop",
+                            fingerprint = fingerprint,
+                            port = 53317,
+                            protocol = protocol,
+                            download = false
+                        },
+                        files = new Dictionary<string, PreUploadFile>()
+                    };
+
+                    foreach(var file in preUploadFiles)
+                    {
+                        payload.files.Add(file.Id, file);
+                    }
+
+                    string jsonReq = JsonConvert.SerializeObject(payload);
+                    var content = new HttpStringContent(
+                        jsonReq,
+                        Windows.Storage.Streams.UnicodeEncoding.Utf8,
+                        "application/json");
+
+                    var uri = new Uri($"{protocol}://{targetIp}:{targetPort}/api/localsend/v2/prepare-upload");
+
+                    var response = await client.PostAsync(uri, content);
+
+                    if (response.IsSuccessStatusCode)
+                    {
+                        string responseBody = await response.Content.ReadAsStringAsync();
+                        UploadFilesRequestList uploadFiles = (UploadFilesRequestList)JsonConvert.DeserializeObject(responseBody);
+                        //TODO send files
+
+                        return;
+
+                    }
+                    else if (response.StatusCode == HttpStatusCode.NoContent)
+                    {
+                        return;
+                    }
+                    else if(response.StatusCode == HttpStatusCode.Forbidden)
+                    {
+
+                    }
+                    else
+                    {
+                        //System.Diagnostics.Debug.WriteLine($"[HTTP反向注册失败] HTTP 状态码: {response.StatusCode}");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                // 打印出具体哪里抛异常了，不要直接吃掉
+                //System.Diagnostics.Debug.WriteLine($"[HTTP注册异常] IP: {targetIp}, 错误: {ex.Message}");
+            }
+        }
+
         /* public async void SendResponse(Stream outStream, STATUS_RESPONSE status, string text = "")
          {
              switch (status)
@@ -442,6 +535,47 @@ namespace UniSend.Services
             return;
         }
 
+
+        private static Certificate _cachedCertificate;
+
+        /*private async Task<Certificate> GetOrCreateClientCertificateAsync()
+        {
+            if (_cachedCertificate != null)
+            {
+                return _cachedCertificate;
+            }
+
+            string certSubject = "CN=UniSendClient";
+
+            // 优先从应用个人证书存储区寻找已存在的证书
+            var query = new CertificateQuery();
+            query.IssuerName = certSubject;
+            var certs = await CertificateStores.FindAllAsync(query);
+
+            if (certs.Count > 0)
+            {
+                _cachedCertificate = certs[0];
+                return _cachedCertificate;
+            }
+
+            // 没有则动态创建一个自签名证书
+            var req = new CertificateRequestProperties
+            {
+                Subject = certSubject,
+                KeyAlgorithmName = KeyAlgorithmNames.Rsa,
+                KeySize = 2048,
+                FriendlyName = "UniSend LocalSend TLS Cert"
+            };
+
+            // 生成自签名证书并存入证书库
+            _cachedCertificate = await CertificateEnrollmentManager.CreateSelfSignedCertificateAsync(
+                req,
+                DateTimeOffset.UtcNow,
+                DateTimeOffset.UtcNow.AddYears(5));
+
+            return _cachedCertificate;
+        }*/
+
         public void Dispose() => _listener?.Dispose();
     }
 
@@ -452,5 +586,11 @@ namespace UniSend.Services
         INVALID,
         REJECT,
         UNKNOWN
+    }
+
+    public class WebResponse
+    {
+        public HttpStatusCode Code { get; set; }
+        public string Message { get; set; }
     }
 }
