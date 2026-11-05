@@ -45,7 +45,7 @@ namespace UniSend.Services
         {
             if (_writer == null) return;
 
-            // 广播 protocol 设置为 https
+            // 广播 protocol 设置为 http
             var announceDto = new
             {
                 alias = DeviceAlias,

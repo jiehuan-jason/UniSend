@@ -16,10 +16,13 @@ using Windows.Web.Http.Filters;
 using Windows.Security.Cryptography.Certificates;
 using Windows.Web.Http;
 using UniSend.Utils;
+using Windows.Storage.Streams;
+using Windows.Web.Http.Headers;
+using System.Linq;
 
 namespace UniSend.Services
 {
-    
+
 
     public class LocalSendHttpServer : IDisposable
     {
@@ -90,11 +93,17 @@ namespace UniSend.Services
                     string rawUrl = reqParts[1];
 
                     long contentLength = 0;
+                    bool isChunked = false;
                     foreach (var line in lines)
                     {
                         if (line.StartsWith("Content-Length:", StringComparison.OrdinalIgnoreCase))
                         {
                             long.TryParse(line.Substring(15).Trim(), out contentLength);
+                        }
+                        else if (line.StartsWith("Transfer-Encoding:", StringComparison.OrdinalIgnoreCase) &&
+                                    line.IndexOf("chunked", StringComparison.OrdinalIgnoreCase) >= 0)
+                        {
+                            isChunked = true;
                         }
                     }
 
@@ -157,7 +166,7 @@ namespace UniSend.Services
                     else if (method == "POST" && path == "/api/localsend/v2/upload")
                     {
                         // 文件传输依然直接走底层 Stream
-                        await HandleFileUploadAsync(uri.Query, inStream, contentLength, outStream);
+                        await HandleFileUploadAsync(uri.Query, inStream, isChunked, contentLength, outStream);
                     }
                     else
                     {
@@ -205,7 +214,7 @@ namespace UniSend.Services
 
                     filesList.Add(uploadFileObj);
 
-                    if(!uploadFileObj.Preview.Equals(""))
+                    if (!uploadFileObj.Preview.Equals(""))
                     {
 
                         ReceivedTextFile?.Invoke(filesList[filesList.Count - 1]);
@@ -241,7 +250,7 @@ namespace UniSend.Services
             }
         }
 
-        private async Task HandleFileUploadAsync(string queryString, Stream bodyStream, long contentLength, Stream outStream)
+        private async Task HandleFileUploadAsync(string queryString, Stream bodyStream, bool isChunked, long contentLength, Stream outStream)
         {
             // 1. 防御性检查
             if (string.IsNullOrWhiteSpace(queryString) || queryString == "?")
@@ -249,8 +258,6 @@ namespace UniSend.Services
                 await SendResponseAsync(outStream, "400 Bad Request", "text/plain", "Missing query parameters");
                 return;
             }
-
-
 
             // 2. 解析 QueryString
             string sessionId = null, fileId = null, token = null;
@@ -288,11 +295,10 @@ namespace UniSend.Services
             string fileName = _fileNames.TryGetValue(fileId, out var name) ? name : "received_file.bin";
             string ext = Path.GetExtension(fileName);
 
-            if (ext.Equals(".txt"))
+            if (ext.Equals(".txt", StringComparison.OrdinalIgnoreCase))
             {
                 return;
             }
-
 
             // 4. 使用 TaskCompletionSource 让后台线程等待 UI 弹窗选择彻底结束
             var tcs = new TaskCompletionSource<StorageFile>();
@@ -305,14 +311,13 @@ namespace UniSend.Services
                     var savePicker = new FileSavePicker();
                     savePicker.SuggestedStartLocation = Windows.Storage.Pickers.PickerLocationId.Downloads;
                     savePicker.SuggestedFileName = Path.GetFileNameWithoutExtension(fileName);
-                    
+
                     if (string.IsNullOrEmpty(ext))
                     {
                         ext = ".bin";
                     }
                     savePicker.FileTypeChoices.Add("文件类型", new System.Collections.Generic.List<string>() { ext });
 
-                    // 真正等待用户操作完成
                     var pickedFile = await savePicker.PickSaveFileAsync();
                     tcs.TrySetResult(pickedFile);
                 }
@@ -323,20 +328,26 @@ namespace UniSend.Services
                 }
             });
 
-            // 关键点：后台线程在此处真正挂起等待，直到用户选定文件或取消
             StorageFile file = await tcs.Task;
 
             // 5. 判断用户是否选择了保存位置
             if (file == null)
             {
-                // 用户真的点击了取消或关闭选择器：读空流并回复取消
-                byte[] discardBuf = new byte[8192];
-                long remainingDiscard = contentLength;
-                while (remainingDiscard > 0)
+                // 用户取消：排空网络流以保持连接正常闭合
+                if (isChunked)
                 {
-                    int r = await bodyStream.ReadAsync(discardBuf, 0, (int)Math.Min(discardBuf.Length, remainingDiscard));
-                    if (r == 0) break;
-                    remainingDiscard -= r;
+                    await ReadOrDiscardChunkedStreamAsync(bodyStream, null);
+                }
+                else
+                {
+                    byte[] discardBuf = new byte[8192];
+                    long remainingDiscard = contentLength;
+                    while (remainingDiscard > 0)
+                    {
+                        int r = await bodyStream.ReadAsync(discardBuf, 0, (int)Math.Min(discardBuf.Length, remainingDiscard));
+                        if (r == 0) break;
+                        remainingDiscard -= r;
+                    }
                 }
 
                 await SendResponseAsync(outStream, "409 Conflict", "text/plain", "User cancelled save");
@@ -346,20 +357,117 @@ namespace UniSend.Services
             // 6. 写入用户选定的目标文件
             using (var destStream = await file.OpenStreamForWriteAsync())
             {
-                byte[] buffer = new byte[65536]; // 64 KB 读写缓冲
-                long remaining = contentLength;
-                while (remaining > 0)
+                if (isChunked)
                 {
-                    int read = await bodyStream.ReadAsync(buffer, 0, (int)Math.Min(buffer.Length, remaining));
-                    if (read == 0) break;
-                    await destStream.WriteAsync(buffer, 0, read);
-                    remaining -= read;
+                    // Chunked 模式：逐块解析十六进制长度并直接写入目标文件
+                    await ReadOrDiscardChunkedStreamAsync(bodyStream, destStream);
+                }
+                else
+                {
+                    // 定长模式：根据 Content-Length 计数递减写入
+                    byte[] buffer = new byte[65536];
+                    long remaining = contentLength;
+                    while (remaining > 0)
+                    {
+                        int read = await bodyStream.ReadAsync(buffer, 0, (int)Math.Min(buffer.Length, remaining));
+                        if (read == 0) break;
+                        await destStream.WriteAsync(buffer, 0, read);
+                        remaining -= read;
+                    }
                 }
             }
 
             // 7. 清理 Token 并通知传输完成
             files.TryRemove(fileId, out _);
             await SendResponseAsync(outStream, "200 OK", "application/json", "{}");
+        }
+
+        /// <summary>
+        /// 解析 HTTP Chunked 字节流。如果 destStream 为 null，则仅排空网络流不写入文件。
+        /// </summary>
+        private async Task ReadOrDiscardChunkedStreamAsync(Stream inStream, Stream destStream)
+        {
+            byte[] buffer = new byte[65536];
+
+            while (true)
+            {
+                // 1. 读取十六进制 Chunk 块长度（直到 \r\n）
+                string sizeLine = await ReadLineAsciiAsync(inStream);
+                if (string.IsNullOrEmpty(sizeLine))
+                {
+                    break;
+                }
+
+                int extIndex = sizeLine.IndexOf(';');
+                if (extIndex >= 0)
+                {
+                    sizeLine = sizeLine.Substring(0, extIndex);
+                }
+
+                long chunkSize = Convert.ToInt64(sizeLine.Trim(), 16);
+
+                // 2. 长度为 0 表示 Chunk 结束块
+                if (chunkSize == 0)
+                {
+                    // 吸收终止块尾部的空行 \r\n
+                    await ReadLineAsciiAsync(inStream);
+                    break;
+                }
+
+                // 3. 读取当前 Chunk 块的真实字节并写入或丢弃
+                long remaining = chunkSize;
+                while (remaining > 0)
+                {
+                    int toRead = (int)Math.Min(buffer.Length, remaining);
+                    int read = await inStream.ReadAsync(buffer, 0, toRead);
+                    if (read == 0)
+                    {
+                        throw new EndOfStreamException("网络连接异常断开，Chunk 数据不完整");
+                    }
+
+                    if (destStream != null)
+                    {
+                        await destStream.WriteAsync(buffer, 0, read);
+                    }
+                    remaining -= read;
+                }
+
+                // 4. 吸收并丢弃每个 Chunk 块末尾固定的 \r\n 两个字节
+                byte[] crlf = new byte[2];
+                int crlfRead = 0;
+                while (crlfRead < 2)
+                {
+                    int r = await inStream.ReadAsync(crlf, crlfRead, 2 - crlfRead);
+                    if (r == 0) break;
+                    crlfRead += r;
+                }
+            }
+        }
+
+        /// <summary>
+        /// 从 Stream 读取单行 ASCII 文本（直到遇到 \r\n）
+        /// </summary>
+        private async Task<string> ReadLineAsciiAsync(Stream stream)
+        {
+            var bytes = new System.Collections.Generic.List<byte>();
+            byte[] single = new byte[1];
+
+            while (true)
+            {
+                int r = await stream.ReadAsync(single, 0, 1);
+                if (r == 0) break;
+
+                bytes.Add(single[0]);
+                int count = bytes.Count;
+                if (count >= 2 && bytes[count - 2] == '\r' && bytes[count - 1] == '\n')
+                {
+                    return Encoding.ASCII.GetString(bytes.ToArray(), 0, count - 2);
+                }
+
+                if (count > 256) throw new InvalidDataException("Chunk 长度头超长异常");
+            }
+
+            return bytes.Count > 0 ? Encoding.ASCII.GetString(bytes.ToArray()) : null;
         }
 
         /// <summary>
@@ -455,13 +563,13 @@ namespace UniSend.Services
                             deviceType = "desktop",
                             fingerprint = fingerprint,
                             port = 53317,
-                            protocol = protocol,
+                            protocol = "http",
                             download = false
                         },
                         files = new Dictionary<string, PreUploadFile>()
                     };
 
-                    foreach(var file in preUploadFiles)
+                    foreach (var file in preUploadFiles)
                     {
                         payload.files.Add(file.Id, file);
                     }
@@ -479,9 +587,55 @@ namespace UniSend.Services
                     if (response.IsSuccessStatusCode)
                     {
                         string responseBody = await response.Content.ReadAsStringAsync();
-                        UploadFilesRequestList uploadFiles = (UploadFilesRequestList)JsonConvert.DeserializeObject(responseBody);
-                        //TODO send files
+                        UploadFilesRequestList uploadFiles = JsonConvert.DeserializeObject<UploadFilesRequestList>(responseBody);
+                        bool useTls = protocol.Equals("https");
 
+                        // 3. 循环发送已就绪的文件
+                        var pendingDict = preUploadFiles.ToDictionary(f => f.Id, f => f);
+
+                        // 2. 遍历对面同意接收并返回了 Token 的文件清单
+                        foreach (var fileItem in uploadFiles.Files)
+                        {
+                            string fileId = fileItem.Key;      // 对应的就是 PreUploadFile.Id
+                            string token = fileItem.Value;     // 对端分配的上传凭证
+
+                            // 根据 Id 找到我们本地对应的 PreUploadFile 对象
+                            if (!pendingDict.TryGetValue(fileId, out PreUploadFile preFile))
+                            {
+                                // 容错：如果对端返回的 id 本地没有，跳过
+                                continue;
+                            }
+
+                            Stream streamToSend = preFile.stream;
+
+                            // 重点避坑：如果 stream 是 MemoryStream 或可寻址流，必须将读取指针移到开头
+                            if (streamToSend != null && streamToSend.CanSeek)
+                            {
+                                streamToSend.Position = 0;
+                            }
+
+                            // 执行上传
+                            bool success = await SendUploadFileAsync(
+                                ip: targetIp,
+                                port: targetPort,
+                                isHttps: useTls,
+                                sessionId: uploadFiles.SessionId,
+                                fileId: preFile.Id,
+                                fileToken: token,
+                                fileStream: streamToSend
+                            );
+
+                            if (!success)
+                            {
+                                // 发送失败处理逻辑
+                                System.Diagnostics.Debug.WriteLine($"文件发送失败: {preFile.Name}");
+                                break;
+                            }
+                            else
+                            {
+                                System.Diagnostics.Debug.WriteLine($"文件发送成功: {preFile.Name}");
+                            }
+                        }
                         return;
 
                     }
@@ -489,7 +643,7 @@ namespace UniSend.Services
                     {
                         return;
                     }
-                    else if(response.StatusCode == HttpStatusCode.Forbidden)
+                    else if (response.StatusCode == HttpStatusCode.Forbidden)
                     {
 
                     }
@@ -503,6 +657,87 @@ namespace UniSend.Services
             {
                 // 打印出具体哪里抛异常了，不要直接吃掉
                 //System.Diagnostics.Debug.WriteLine($"[HTTP注册异常] IP: {targetIp}, 错误: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// 向对端发送单个文件
+        /// </summary>
+        /// <param name="ip">对端 IP 地址</param>
+        /// <param name="port">对端端口号（通常为 53317）</param>
+        /// <param name="isHttps">是否使用 TLS (HTTPS)</param>
+        /// <param name="sessionId">prepare-upload 返回的 sessionId</param>
+        /// <param name="fileId">文件的唯一标识（prepare-upload 时的 key）</param>
+        /// <param name="fileToken">对端分配的文件 Token（uploadFiles.Files[fileId] 的 value）</param>
+        /// <param name="fileStream">待发送文件的流（支持 FileStream 或 StorageFile 打开的流）</param>
+        /// <param name="cancellationToken">取消令牌</param>
+        /// <returns>是否传输成功</returns>
+        public async Task<bool> SendUploadFileAsync(
+            string ip,
+            int port,
+            bool isHttps,
+            string sessionId,
+            string fileId,
+            string fileToken,
+            Stream fileStream,
+            CancellationToken cancellationToken = default(CancellationToken))
+        {
+            var filter = new HttpBaseProtocolFilter();
+            // 关键：在 10586 下对自签名证书必须加入所有可能的链错误忽略
+            filter.IgnorableServerCertificateErrors.Add(ChainValidationResult.Untrusted);
+            filter.IgnorableServerCertificateErrors.Add(ChainValidationResult.InvalidName);
+            filter.IgnorableServerCertificateErrors.Add(ChainValidationResult.Expired);
+            filter.IgnorableServerCertificateErrors.Add(ChainValidationResult.WrongUsage);
+            filter.IgnorableServerCertificateErrors.Add(ChainValidationResult.RevocationFailure);
+            /*var clientCert = await GetOrCreateClientCertificateAsync();
+            if (clientCert != null)
+            {
+                filter.ClientCertificate = clientCert;
+            }*/
+            var clientCert = await LocalSendSecurityManager.GetOrCreateClientCertificateAsync();
+            if (clientCert != null)
+            {
+                filter.ClientCertificate = clientCert;
+            }
+            using (var client = new HttpClient(filter))
+            {
+                // 1. 判断协议头是 http 还是 https
+                string scheme = isHttps ? "https" : "http";
+
+                // 2. 拼接 LocalSend v2 upload 接口 URL 与 Query 参数
+                // LocalSend 规范：/api/localsend/v2/upload?sessionId={sessionId}&fileId={fileId}&token={token}
+                string url = $"{scheme}://{ip}:{port}/api/localsend/v2/upload" +
+                             $"?sessionId={Uri.EscapeDataString(sessionId)}" +
+                             $"&fileId={Uri.EscapeDataString(fileId)}" +
+                             $"&token={Uri.EscapeDataString(fileToken)}";
+
+                try
+                {
+                    IInputStream winrtStream = fileStream.AsInputStream();
+                    // 3. 构建二进制流 Payload（避免全部载入内存，适合移动端）
+                    using (var content = new HttpStreamContent(winrtStream))
+                    {
+                        content.Headers.ContentType = new HttpMediaTypeHeaderValue("application/octet-stream");
+
+                        // 4. 发起 POST 上传请求
+                        using (var response = await client.PostAsync(new Uri(url), content).AsTask(cancellationToken))
+                        {
+                            if (response.IsSuccessStatusCode)
+                            {
+                                return true;
+                            }
+
+                            string errorBody = await response.Content.ReadAsStringAsync();
+                            System.Diagnostics.Debug.WriteLine($"Upload failed [{response.StatusCode}]: {errorBody}");
+                            return false;
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Exception during SendUploadFileAsync: {ex.Message}");
+                    throw;
+                }
             }
         }
 

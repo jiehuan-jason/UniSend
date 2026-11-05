@@ -71,13 +71,13 @@
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="*" />
                 </Grid.ColumnDefinitions>
-                <Button HorizontalAlignment="Stretch" Grid.Column="0" Margin="0,0,6,0" BorderThickness="1" BorderBrush="Gray" Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
+                <Button x:Name="ChooseFileButton" HorizontalAlignment="Stretch" Grid.Column="0" Margin="0,0,6,0" BorderThickness="1" BorderBrush="Gray" Background="{ThemeResource ApplicationPageBackgroundThemeBrush}" Click="ChooseFileButton_Click">
                     <StackPanel Margin="0,4,0,0">
                         <FontIcon FontFamily="{ThemeResource SymbolThemeFontFamily}" Glyph="&#xE8E5;" />
                         <TextBlock Text="File" />
                     </StackPanel>
                 </Button>
-                <Button HorizontalAlignment="Stretch" Grid.Column="1" Margin="0,0,6,0" BorderThickness="1" BorderBrush="Gray" Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
+                <Button x:Name="ChoosePhotoButton" HorizontalAlignment="Stretch" Grid.Column="1" Margin="0,0,6,0" BorderThickness="1" BorderBrush="Gray" Background="{ThemeResource ApplicationPageBackgroundThemeBrush}" Click="ChoosePhotoButton_Click">
                     <StackPanel Margin="0,4,0,0" VerticalAlignment="Stretch">
                         <FontIcon FontFamily="{ThemeResource SymbolThemeFontFamily}" Glyph="&#xEB9F;" />
                         <TextBlock Text="Photo" />

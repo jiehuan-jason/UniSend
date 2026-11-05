@@ -39,16 +39,25 @@ namespace UniSend.Models
         [JsonProperty("size")]
         public long Size { get; set; }
 
+        [Newtonsoft.Json.JsonIgnore]
+        public Stream stream { get; set; } = null;
+
         public PreUploadFile() { }
 
         static public PreUploadFile PreUploadTextFile(string text)
         {
+            MemoryStream memory = new MemoryStream();
+            StreamWriter writer = new StreamWriter(memory);
+            writer.Write(text);
+            writer.Flush();
+
             var obj = new PreUploadFile();
             obj.Id = Guid.NewGuid().ToString();
             obj.Name = obj.Id + ".txt";
             obj.fileType = "text/plain";
             obj.Size = Encoding.UTF8.GetByteCount(text);
             obj.Preview = text;
+            obj.stream = memory;
             return obj;
         }
     }
@@ -58,6 +67,7 @@ namespace UniSend.Models
         public string SessionId { get; set; }
         public Dictionary<string, string> Files { get; set; } = new Dictionary<string, string>();
 
+        
         
     }
 

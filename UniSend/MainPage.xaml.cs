@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.ObjectModel;
 using System.Linq;
+using System.IO;
 using Windows.Storage;
 using Windows.System;
 using Windows.UI.Core;
@@ -210,6 +211,39 @@ namespace UniSend
             await _httpServer.SendPrepaidUploadFileAsync(target.Ip, preUploadFiles, target.Port, target.Protocol);
             preUploadFiles.Clear();
             FileItems.Clear();
+        }
+
+        private async void ChooseFileButton_Click(object sender, RoutedEventArgs e)
+        {
+
+            var picker = new Windows.Storage.Pickers.FileOpenPicker();
+            picker.ViewMode = Windows.Storage.Pickers.PickerViewMode.Thumbnail;
+            picker.SuggestedStartLocation = Windows.Storage.Pickers.PickerLocationId.DocumentsLibrary;
+            picker.FileTypeFilter.Add("*");
+
+            Windows.Storage.StorageFile file = await picker.PickSingleFileAsync();
+            if (file != null)
+            {
+                preUploadFiles.Add(new PreUploadFile
+                {
+                    Id = Guid.NewGuid().ToString(),
+                    Name = file.Name,
+                    fileType = file.ContentType,
+                    Size = (long) (await file.GetBasicPropertiesAsync()).Size,
+                    stream = await file.OpenStreamForReadAsync()
+                });
+                FileItems.Add(new CardItem
+                {
+                    Title = file.Name,
+                    Icon = "\uE8E5"
+                });
+            }
+
+        }
+
+        private void ChoosePhotoButton_Click(object sender, RoutedEventArgs e)
+        {
+
         }
     }
 }
