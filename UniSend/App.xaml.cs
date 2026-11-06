@@ -96,5 +96,25 @@ namespace UniSend
             //TODO: 保存应用程序状态并停止任何后台活动
             deferral.Complete();
         }
+
+        protected override async void OnShareTargetActivated(ShareTargetActivatedEventArgs args)
+        {
+            // 1. 获取 ShareOperation 对象
+            var shareOperation = args.ShareOperation;
+
+            // 2. 确保当前窗口有 Frame 内容
+            var rootFrame = Window.Current.Content as Frame;
+            if (rootFrame == null)
+            {
+                rootFrame = new Frame();
+                Window.Current.Content = rootFrame;
+            }
+
+            // 3. 导航到专门处理分享的页面（例如 ShareTargetPage），并将 shareOperation 传过去
+            rootFrame.Navigate(typeof(MainPage), shareOperation);
+
+            // 4. 激活窗口
+            Window.Current.Activate();
+        }
     }
 }

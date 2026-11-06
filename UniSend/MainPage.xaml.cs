@@ -15,11 +15,15 @@ using Windows.ApplicationModel.DataTransfer;
 using UniSend.Dialogs;
 using System.Collections.Generic;
 using Windows.UI.Popups;
+using Windows.ApplicationModel.DataTransfer.ShareTarget;
 
 namespace UniSend
 {
     public sealed partial class MainPage : Page
     {
+
+        private ShareOperation _shareOperation;
+
         private LocalSendHttpServer _httpServer;
         private LocalSendDiscoveryService _discoveryService;
 
@@ -65,6 +69,72 @@ namespace UniSend
             };
             _discoveryService.DeviceDiscovered += OnDeviceFound;
             await _discoveryService.StartAsync(fingerprint);
+        }
+
+        protected override async void OnNavigatedTo(Windows.UI.Xaml.Navigation.NavigationEventArgs e)
+        {
+            base.OnNavigatedTo(e);
+            if (e.Parameter is ShareOperation shareOp)
+            {
+                FileChooseButtonsPanel.Visibility = Visibility.Collapsed;
+                _shareOperation = e.Parameter as ShareOperation;
+                if (_shareOperation == null) return;
+
+                // 通知系统正在处理
+                _shareOperation.ReportStarted();
+
+                try
+                {
+                    var dataView = _shareOperation.Data;
+
+                    // 1. 如果分享的是纯文本
+                    if (dataView.Contains(StandardDataFormats.Text))
+                    {
+                        preUploadFiles.Add(PreUploadFile.PreUploadTextFile(await dataView.GetTextAsync()));
+                        FileItems.Add(new CardItem
+                        {
+                            Title = "",
+                            Icon = "\uEA37"
+                        });
+                    }
+
+                    // 2. 如果分享的是文件（如相册选中的照片）
+                    if (dataView.Contains(StandardDataFormats.StorageItems))
+                    {
+                        IReadOnlyList<IStorageItem> items = await dataView.GetStorageItemsAsync();
+                        foreach (var item in items)
+                        {
+                            StorageFile file = item as StorageFile;
+                            if (file != null)
+                            {
+                                preUploadFiles.Add(new PreUploadFile
+                                {
+                                    Id = Guid.NewGuid().ToString(),
+                                    Name = file.Name,
+                                    fileType = file.ContentType,
+                                    Size = (long)(await file.GetBasicPropertiesAsync()).Size,
+                                    stream = await file.OpenStreamForReadAsync()
+                                });
+                                FileItems.Add(new CardItem
+                                {
+                                    Title = file.Name,
+                                    Icon = "\uE8E5"
+                                });
+                            }
+                        }
+                    }
+
+                    // 处理完成后必须通知系统关闭面板
+                    
+                }
+                catch
+                {
+                    _shareOperation.ReportError("处理分享内容时出错");
+                }
+               
+            }
+
+            
         }
 
         private async void ReceivedTextFile(ReceivedUploadFile obj)
@@ -227,6 +297,11 @@ namespace UniSend
             preUploadFiles.Clear();
             FileItems.Clear();
             SetProgressRingStatus(false);
+            if (_shareOperation != null)
+            {
+                _shareOperation.ReportCompleted();
+                _shareOperation = null;
+            }
         }
 
         private async void ChooseFileButton_Click(object sender, RoutedEventArgs e)

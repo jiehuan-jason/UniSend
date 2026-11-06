@@ -64,7 +64,7 @@
             </Grid>
 
             <StackPanel Grid.Row="3" Margin="0,0,0,6">
-                <Grid Grid.Row="3" Margin="0,0,0,6">
+                <Grid x:Name="FileChooseButtonsPanel" Grid.Row="3" Margin="0,0,0,6">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="*" />
