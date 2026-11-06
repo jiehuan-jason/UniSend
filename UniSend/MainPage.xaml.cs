@@ -14,6 +14,7 @@ using Windows.Security.ExchangeActiveSyncProvisioning;
 using Windows.ApplicationModel.DataTransfer;
 using UniSend.Dialogs;
 using System.Collections.Generic;
+using Windows.UI.Popups;
 
 namespace UniSend
 {
@@ -211,6 +212,18 @@ namespace UniSend
             SetProgressRingStatus(true);
             var target = (DeviceDto)e.ClickedItem;
             await _httpServer.SendPrepaidUploadFileAsync(target.Ip, preUploadFiles, target.Port, target.Protocol);
+            await Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, async () =>
+            {
+                try
+                {
+                    await new MessageDialog("已发送" + preUploadFiles.Count + "个文件").ShowAsync();
+
+                }
+                catch (Exception ex)
+                {
+
+                }
+            });
             preUploadFiles.Clear();
             FileItems.Clear();
             SetProgressRingStatus(false);

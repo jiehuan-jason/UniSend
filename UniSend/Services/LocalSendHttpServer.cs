@@ -19,6 +19,7 @@ using UniSend.Utils;
 using Windows.Storage.Streams;
 using Windows.Web.Http.Headers;
 using System.Linq;
+using Windows.UI.Popups;
 
 namespace UniSend.Services
 {
@@ -414,8 +415,23 @@ namespace UniSend.Services
             files.TryRemove(fileId, out _);
             await SendResponseAsync(outStream, "200 OK", "application/json", "{}");
             filesCount.AddProcessedCount();
-            if(filesCount.IsProcessFinish())
+            if (filesCount.IsProcessFinish())
+            {
                 SetProgressRingStatus?.Invoke(false);
+                var dispatcher = Windows.ApplicationModel.Core.CoreApplication.MainView.CoreWindow.Dispatcher;
+                await dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, async () =>
+                {
+                    try
+                    {
+                        await new MessageDialog("已收到" + filesCount.Count + "个文件").ShowAsync();
+
+                    }
+                    catch (Exception ex)
+                    {
+
+                    }
+                });
+            }
         }
 
         /// <summary>
