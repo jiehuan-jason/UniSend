@@ -6,134 +6,137 @@
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:models="using:UniSend.Models"
     mc:Ignorable="d">
-
-    <Grid Background="{ThemeResource ApplicationPageBackgroundThemeBrush}" Padding="24">
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="*"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="100"/>
-        </Grid.RowDefinitions>
-
-        <!-- 顶部操作栏 -->
-        <StackPanel Grid.Row="0">
-            <StackPanel Orientation="Horizontal">
-                <Button HorizontalAlignment="Center" VerticalAlignment="Center" Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
-                    <FontIcon FontFamily="{ThemeResource SymbolThemeFontFamily}" Glyph="&#xE700;" Height="30" />
-                </Button>
-                <TextBlock Text="UniSend" FontSize="30" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="6,0,0,8"/>
-            </StackPanel>
-            
-            <StackPanel Orientation="Horizontal">
-                
-            </StackPanel>
-        </StackPanel>
-
-        <Grid Grid.Row="1">
-            
-        </Grid>
-
-        <!-- 中部：已发现设备列表 -->
-        <Grid Grid.Row="2" Margin="0,8,0,16">
+    <Grid x:Name="RootGrid" Background="{ThemeResource ApplicationPageBackgroundThemeBrush}" Padding="24" IsHitTestVisible="True">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
                 <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="100"/>
             </Grid.RowDefinitions>
 
-            <StackPanel Grid.Row="0" Orientation="Horizontal">
-                <TextBlock Text="已发现的设备" FontSize="18" Margin="0,0,0,8" VerticalAlignment="Center"/>
-                <Button Click="OnBroadcastClick" Margin="8,-6,8,0"  Background="{ThemeResource ApplicationPageBackgroundThemeBrush}" VerticalAlignment="Center">
-                    <FontIcon Height="25" FontFamily="{ThemeResource SymbolThemeFontFamily}" Glyph="&#xE895;" />
-                </Button>
+            <!-- 顶部操作栏 -->
+            <StackPanel Grid.Row="0">
+                <StackPanel Orientation="Horizontal">
+                    <Button HorizontalAlignment="Center" VerticalAlignment="Center" Background="{ThemeResource ApplicationPageBackgroundThemeBrush}" Visibility="Collapsed">
+                        <FontIcon FontFamily="{ThemeResource SymbolThemeFontFamily}" Glyph="&#xE700;" Height="30" />
+                    </Button>
+                    <TextBlock Text="UniSend" FontSize="30" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,0,0,8"/>
+                </StackPanel>
+
+                <StackPanel Orientation="Horizontal">
+
+                </StackPanel>
             </StackPanel>
 
-            <ListView Grid.Row="1" x:Name="DeviceListView" IsItemClickEnabled = "True" ItemClick="DeviceListView_ItemClick">
-                <ListView.ItemTemplate>
-                    <DataTemplate x:DataType="models:DeviceDto">
-                        <StackPanel Padding="8">
-                            <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
-                                <TextBlock FontFamily="{ThemeResource SymbolThemeFontFamily}" Text="&#xE703;" FontSize="16" Margin="0,0,8,0"/>
-                                <TextBlock Text="{x:Bind Alias}" FontWeight="Bold" Margin="0,0,8,0"/>
-                                <TextBlock Text="{x:Bind DeviceModel}" Foreground="Gray"/>
-                            </StackPanel>
-                            <TextBlock Text="{x:Bind DisplayText}" FontSize="12" Foreground="DarkGray"/>
-                        </StackPanel>
-                    </DataTemplate>
-                </ListView.ItemTemplate>
-            </ListView>
-        </Grid>
-
-        <StackPanel Grid.Row="3" Margin="0,0,0,6">
-            <Grid Grid.Row="3" Margin="0,0,0,6">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="*" />
-                </Grid.ColumnDefinitions>
-                <Button x:Name="ChooseFileButton" HorizontalAlignment="Stretch" Grid.Column="0" Margin="0,0,6,0" BorderThickness="1" BorderBrush="Gray" Background="{ThemeResource ApplicationPageBackgroundThemeBrush}" Click="ChooseFileButton_Click">
-                    <StackPanel Margin="0,4,0,0">
-                        <FontIcon FontFamily="{ThemeResource SymbolThemeFontFamily}" Glyph="&#xE8E5;" />
-                        <TextBlock Text="File" />
-                    </StackPanel>
-                </Button>
-                <Button x:Name="ChoosePhotoButton" HorizontalAlignment="Stretch" Grid.Column="1" Margin="0,0,6,0" BorderThickness="1" BorderBrush="Gray" Background="{ThemeResource ApplicationPageBackgroundThemeBrush}" Click="ChoosePhotoButton_Click">
-                    <StackPanel Margin="0,4,0,0" VerticalAlignment="Stretch">
-                        <FontIcon FontFamily="{ThemeResource SymbolThemeFontFamily}" Glyph="&#xEB9F;" />
-                        <TextBlock Text="Photo" />
-                    </StackPanel>
-                </Button>
-                <Button x:Name="ChooseTextButton" HorizontalAlignment="Stretch" Grid.Column="2" Margin="0,0,0,0" BorderThickness="1" BorderBrush="Gray" Background="{ThemeResource ApplicationPageBackgroundThemeBrush}" Click="ChooseTextButton_Click">
-                    <StackPanel Margin="0,4,0,0" VerticalAlignment="Stretch">
-                        <FontIcon FontFamily="{ThemeResource SymbolThemeFontFamily}" Glyph="&#xEA37;" />
-                        <TextBlock Text="Text" />
-                    </StackPanel>
-                </Button>
+            <Grid Grid.Row="1">
 
             </Grid>
-            <ScrollViewer Height="60" BorderBrush="Gray" BorderThickness="1" Margin="0,0,0,6">
-                <ListView ItemsSource="{x:Bind FileItems}"
+
+            <!-- 中部：已发现设备列表 -->
+            <Grid Grid.Row="2" Margin="0,8,0,16">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+
+                <StackPanel Grid.Row="0" Orientation="Horizontal">
+                    <TextBlock Text="已发现的设备" FontSize="18" Margin="0,0,0,8" VerticalAlignment="Center"/>
+                    <Button Click="OnBroadcastClick" Margin="8,-6,8,0"  Background="{ThemeResource ApplicationPageBackgroundThemeBrush}" VerticalAlignment="Center">
+                        <FontIcon Height="25" FontFamily="{ThemeResource SymbolThemeFontFamily}" Glyph="&#xE895;" />
+                    </Button>
+                </StackPanel>
+
+                <ListView Grid.Row="1" x:Name="DeviceListView" IsItemClickEnabled = "True" ItemClick="DeviceListView_ItemClick">
+                    <ListView.ItemTemplate>
+                        <DataTemplate x:DataType="models:DeviceDto">
+                            <StackPanel Padding="8">
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                    <TextBlock FontFamily="{ThemeResource SymbolThemeFontFamily}" Text="&#xE703;" FontSize="16" Margin="0,0,8,0"/>
+                                    <TextBlock Text="{x:Bind Alias}" FontWeight="Bold" Margin="0,0,8,0"/>
+                                    <TextBlock Text="{x:Bind DeviceModel}" Foreground="Gray"/>
+                                </StackPanel>
+                                <TextBlock Text="{x:Bind DisplayText}" FontSize="12" Foreground="DarkGray" TextWrapping="WrapWholeWords"/>
+                            </StackPanel>
+                        </DataTemplate>
+                    </ListView.ItemTemplate>
+                </ListView>
+            </Grid>
+
+            <StackPanel Grid.Row="3" Margin="0,0,0,6">
+                <Grid Grid.Row="3" Margin="0,0,0,6">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Button x:Name="ChooseFileButton" HorizontalAlignment="Stretch" Grid.Column="0" Margin="0,0,6,0" BorderThickness="1" BorderBrush="Gray" Background="{ThemeResource ApplicationPageBackgroundThemeBrush}" Click="ChooseFileButton_Click">
+                        <StackPanel Margin="0,4,0,0">
+                            <FontIcon FontFamily="{ThemeResource SymbolThemeFontFamily}" Glyph="&#xE8E5;" />
+                            <TextBlock Text="File" />
+                        </StackPanel>
+                    </Button>
+                    <Button x:Name="ChoosePhotoButton" HorizontalAlignment="Stretch" Grid.Column="1" Margin="0,0,6,0" BorderThickness="1" BorderBrush="Gray" Background="{ThemeResource ApplicationPageBackgroundThemeBrush}" Click="ChoosePhotoButton_Click">
+                        <StackPanel Margin="0,4,0,0" VerticalAlignment="Stretch">
+                            <FontIcon FontFamily="{ThemeResource SymbolThemeFontFamily}" Glyph="&#xEB9F;" />
+                            <TextBlock Text="Photo" />
+                        </StackPanel>
+                    </Button>
+                    <Button x:Name="ChooseTextButton" HorizontalAlignment="Stretch" Grid.Column="2" Margin="0,0,0,0" BorderThickness="1" BorderBrush="Gray" Background="{ThemeResource ApplicationPageBackgroundThemeBrush}" Click="ChooseTextButton_Click">
+                        <StackPanel Margin="0,4,0,0" VerticalAlignment="Stretch">
+                            <FontIcon FontFamily="{ThemeResource SymbolThemeFontFamily}" Glyph="&#xEA37;" />
+                            <TextBlock Text="Text" />
+                        </StackPanel>
+                    </Button>
+
+                </Grid>
+                <ScrollViewer Height="60" BorderBrush="Gray" BorderThickness="1" Margin="0,0,0,6">
+                    <ListView ItemsSource="{x:Bind FileItems}"
                           SelectionMode="Single"
                           ScrollViewer.HorizontalScrollBarVisibility="Auto"
                           ScrollViewer.VerticalScrollBarVisibility="Disabled"
                           ScrollViewer.HorizontalScrollMode="Enabled"
                           ScrollViewer.VerticalScrollMode="Disabled">
-                    <ListView.ItemsPanel>
-                        <ItemsPanelTemplate>
-                            <ItemsStackPanel Orientation="Horizontal" />
-                        </ItemsPanelTemplate>
-                    </ListView.ItemsPanel>
-                    <ListView.ItemContainerStyle>
-                        <Style TargetType="ListViewItem">
-                            <Setter Property="Width" Value="60" />
-                            <Setter Property="MinWidth" Value="60" />
-                            <Setter Property="MaxWidth" Value="60" />
-                        </Style>
-                    </ListView.ItemContainerStyle>
-                    <ListView.ItemTemplate>
-                        <DataTemplate x:DataType="models:CardItem" >
-                            <Grid Margin="4">
-                                <FontIcon FontFamily="{ThemeResource SymbolThemeFontFamily}" Glyph="{Binding Icon}" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" FontSize="36" />
-                            </Grid>
-                            
-                        </DataTemplate>
-                    </ListView.ItemTemplate>
-                </ListView>
-            </ScrollViewer>
-            <TextBlock>
+                        <ListView.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <ItemsStackPanel Orientation="Horizontal" />
+                            </ItemsPanelTemplate>
+                        </ListView.ItemsPanel>
+                        <ListView.ItemContainerStyle>
+                            <Style TargetType="ListViewItem">
+                                <Setter Property="Width" Value="70" />
+                                <Setter Property="MinWidth" Value="70" />
+                                <Setter Property="MaxWidth" Value="70" />
+                            </Style>
+                        </ListView.ItemContainerStyle>
+                        <ListView.ItemTemplate>
+                            <DataTemplate x:DataType="models:CardItem" >
+                                <Grid Margin="4">
+                                    <FontIcon FontFamily="{ThemeResource SymbolThemeFontFamily}" Glyph="{Binding Icon}" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" FontSize="36" />
+                                </Grid>
+
+                            </DataTemplate>
+                        </ListView.ItemTemplate>
+                    </ListView>
+                </ScrollViewer>
+                <TextBlock>
                 <Run Text="共" />
                 <Run Text="{x:Bind FileItems.Count, Mode=OneWay}" />
                 <Run Text="个文件" />
-            </TextBlock>
-        </StackPanel>
-        
+                </TextBlock>
+            </StackPanel>
 
-        <!-- 底部：日志控制台 -->
-        <ScrollViewer Grid.Row="4" BorderThickness="1" BorderBrush="LightGray" Padding="6">
-            <TextBlock x:Name="TxtLogs" TextWrapping="Wrap" FontFamily="Consolas" FontSize="11"/>
-        </ScrollViewer>
-        
-        
-    </Grid>
-    
+
+            <!-- 底部：日志控制台 -->
+            <ScrollViewer Grid.Row="4" BorderThickness="1" BorderBrush="LightGray" Padding="6">
+                <TextBlock x:Name="TxtLogs" TextWrapping="Wrap" FontFamily="Consolas" FontSize="11"/>
+            </ScrollViewer>
+
+            <ProgressRing x:Name="SendProgressRing" 
+                      Grid.Row="2"
+                      Height="80"
+                      Width="80"
+                      VerticalAlignment="Center"
+                      IsActive="False"/>
+        </Grid>
 </Page>

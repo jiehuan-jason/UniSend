@@ -37,8 +37,13 @@ namespace UniSend.Services
         public string Fingerprint { get; set; }
         public int Port { get; set; } = 53317;
 
+        private StorageFolder folder;
+
+        private FilesCount filesCount;
+
         public event Action<DeviceDto> DeviceDiscovered;
         public event Action<ReceivedUploadFile> ReceivedTextFile;
+        public event Action<bool> SetProgressRingStatus;
 
         public async Task StartAsync(string fingerprint, int port = 53317)
         {
@@ -181,6 +186,8 @@ namespace UniSend.Services
         {
             try
             {
+                SetProgressRingStatus?.Invoke(true);
+                
                 JObject root = JObject.Parse(json);
                 var filesObj = root["files"] as JObject;
                 var senderName = (string)root["info"]?["alias"] ?? "Unknown Device";
@@ -242,6 +249,30 @@ namespace UniSend.Services
 
                 var respObj = new { sessionId = sessionId, files = responseFiles };
                 string responseJson = JsonConvert.SerializeObject(respObj);
+                var tcs = new TaskCompletionSource<StorageFolder>();
+
+                var dispatcher = Windows.ApplicationModel.Core.CoreApplication.MainView.CoreWindow.Dispatcher;
+                await dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, async () =>
+                {
+                    try
+                    {
+                        
+
+                        var saveFolderPicker = new FolderPicker();
+                        saveFolderPicker.SuggestedStartLocation = Windows.Storage.Pickers.PickerLocationId.Downloads;
+
+                        var pickedFolder = await saveFolderPicker.PickSingleFolderAsync();
+                        tcs.TrySetResult(pickedFolder);
+                    }
+                    catch (Exception ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[Picker 异常] {ex.Message}");
+                        tcs.TrySetResult(null);
+                    }
+                });
+
+                folder = await tcs.Task;
+                filesCount = new FilesCount(filesList.Count);
                 await SendResponseAsync(outStream, "200 OK", "application/json", responseJson);
             }
             catch
@@ -301,7 +332,7 @@ namespace UniSend.Services
             }
 
             // 4. 使用 TaskCompletionSource 让后台线程等待 UI 弹窗选择彻底结束
-            var tcs = new TaskCompletionSource<StorageFile>();
+            /*var tcs = new TaskCompletionSource<StorageFile>();
 
             var dispatcher = Windows.ApplicationModel.Core.CoreApplication.MainView.CoreWindow.Dispatcher;
             await dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, async () =>
@@ -328,10 +359,10 @@ namespace UniSend.Services
                 }
             });
 
-            StorageFile file = await tcs.Task;
+            StorageFile file = await tcs.Task;*/
 
             // 5. 判断用户是否选择了保存位置
-            if (file == null)
+            if (folder == null)
             {
                 // 用户取消：排空网络流以保持连接正常闭合
                 if (isChunked)
@@ -351,9 +382,11 @@ namespace UniSend.Services
                 }
 
                 await SendResponseAsync(outStream, "409 Conflict", "text/plain", "User cancelled save");
+                SetProgressRingStatus?.Invoke(false);
                 return;
             }
 
+            var file = await folder.CreateFileAsync(fileName,CreationCollisionOption.GenerateUniqueName);
             // 6. 写入用户选定的目标文件
             using (var destStream = await file.OpenStreamForWriteAsync())
             {
@@ -380,6 +413,9 @@ namespace UniSend.Services
             // 7. 清理 Token 并通知传输完成
             files.TryRemove(fileId, out _);
             await SendResponseAsync(outStream, "200 OK", "application/json", "{}");
+            filesCount.AddProcessedCount();
+            if(filesCount.IsProcessFinish())
+                SetProgressRingStatus?.Invoke(false);
         }
 
         /// <summary>

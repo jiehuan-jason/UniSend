@@ -76,4 +76,17 @@ namespace UniSend.Models
         public string Title { get; set; }
         public string Icon { get; set; } // 内置图标，比如 Symbol.Document, Symbol.Camera
     }
+
+    public class FilesCount
+    {
+        public int Count { get; set; }
+        public int ProcessedCount { get; set; }
+        public FilesCount(int count)
+        {
+            Count = count;
+            ProcessedCount = 0;
+        }
+        public void AddProcessedCount() { ProcessedCount++; }
+        public bool IsProcessFinish() { return ProcessedCount >= Count; }
+    }
 }

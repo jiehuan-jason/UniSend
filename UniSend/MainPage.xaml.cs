@@ -54,6 +54,7 @@ namespace UniSend
             };
             _httpServer.DeviceDiscovered += OnDeviceFound;
             _httpServer.ReceivedTextFile += ReceivedTextFile;
+            _httpServer.SetProgressRingStatus += SetProgressRingStatus;
             await _httpServer.StartAsync(fingerprint);
 
             _discoveryService = new LocalSendDiscoveryService
@@ -207,10 +208,12 @@ namespace UniSend
 
         private async void DeviceListView_ItemClick(object sender, ItemClickEventArgs e)
         {
+            SetProgressRingStatus(true);
             var target = (DeviceDto)e.ClickedItem;
             await _httpServer.SendPrepaidUploadFileAsync(target.Ip, preUploadFiles, target.Port, target.Protocol);
             preUploadFiles.Clear();
             FileItems.Clear();
+            SetProgressRingStatus(false);
         }
 
         private async void ChooseFileButton_Click(object sender, RoutedEventArgs e)
@@ -221,29 +224,72 @@ namespace UniSend
             picker.SuggestedStartLocation = Windows.Storage.Pickers.PickerLocationId.DocumentsLibrary;
             picker.FileTypeFilter.Add("*");
 
-            Windows.Storage.StorageFile file = await picker.PickSingleFileAsync();
-            if (file != null)
+            IReadOnlyCollection<StorageFile> filesList = await picker.PickMultipleFilesAsync();
+
+            foreach (var file in filesList)
             {
-                preUploadFiles.Add(new PreUploadFile
+                if (file != null)
                 {
-                    Id = Guid.NewGuid().ToString(),
-                    Name = file.Name,
-                    fileType = file.ContentType,
-                    Size = (long) (await file.GetBasicPropertiesAsync()).Size,
-                    stream = await file.OpenStreamForReadAsync()
-                });
-                FileItems.Add(new CardItem
-                {
-                    Title = file.Name,
-                    Icon = "\uE8E5"
-                });
+                    preUploadFiles.Add(new PreUploadFile
+                    {
+                        Id = Guid.NewGuid().ToString(),
+                        Name = file.Name,
+                        fileType = file.ContentType,
+                        Size = (long)(await file.GetBasicPropertiesAsync()).Size,
+                        stream = await file.OpenStreamForReadAsync()
+                    });
+                    FileItems.Add(new CardItem
+                    {
+                        Title = file.Name,
+                        Icon = "\uE8E5"
+                    });
+                }
             }
+
 
         }
 
-        private void ChoosePhotoButton_Click(object sender, RoutedEventArgs e)
+        private async void ChoosePhotoButton_Click(object sender, RoutedEventArgs e)
         {
+            var picker = new Windows.Storage.Pickers.FileOpenPicker();
+            picker.ViewMode = Windows.Storage.Pickers.PickerViewMode.Thumbnail;
+            picker.SuggestedStartLocation = Windows.Storage.Pickers.PickerLocationId.PicturesLibrary;
+            picker.FileTypeFilter.Add(".jpg");
+            picker.FileTypeFilter.Add(".jpeg");
+            picker.FileTypeFilter.Add(".png");
+            picker.FileTypeFilter.Add(".gif");
+            picker.FileTypeFilter.Add(".heic");
 
+
+            IReadOnlyCollection<StorageFile> filesList = await picker.PickMultipleFilesAsync();
+            foreach (var file in filesList)
+            {
+                if (file != null)
+                {
+                    preUploadFiles.Add(new PreUploadFile
+                    {
+                        Id = Guid.NewGuid().ToString(),
+                        Name = file.Name,
+                        fileType = file.ContentType,
+                        Size = (long)(await file.GetBasicPropertiesAsync()).Size,
+                        stream = await file.OpenStreamForReadAsync()
+                    });
+                    FileItems.Add(new CardItem
+                    {
+                        Title = file.Name,
+                        Icon = "\uE8E5"
+                    });
+                }
+            }
+        }
+
+        public async void SetProgressRingStatus(bool isEnable)
+        {
+            await Dispatcher.RunAsync(CoreDispatcherPriority.Normal, () => {
+                SendProgressRing.IsActive = isEnable;
+                RootGrid.IsHitTestVisible = !isEnable;
+            });
+            
         }
     }
 }
